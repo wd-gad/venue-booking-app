@@ -2465,6 +2465,14 @@ async function syncSessionState(
 
     setMessage(`サインイン中: ${user.name ?? user.email}`);
   } catch (error) {
+    if (error instanceof Error && /unauthorized|401/i.test(error.message)) {
+      setUserName(null);
+      setUserEmail(null);
+      setVenues([]);
+      setMessage("セッションの有効期限が切れました。再度サインインしてください。");
+      return;
+    }
+
     setMessage(
       error instanceof Error
         ? `会場データの取得に失敗しました: ${error.message}`
