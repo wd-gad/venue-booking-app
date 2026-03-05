@@ -335,6 +335,10 @@ th {
   grid-template-columns: minmax(0, 1.8fr) minmax(320px, 0.95fr);
 }
 
+.workspace-grid-single {
+  grid-template-columns: 1fr;
+}
+
 .side-stack {
   display: grid;
   gap: 20px;
@@ -383,6 +387,12 @@ th {
 
 .map-panel {
   overflow: hidden;
+}
+
+.spatial-venues-panel {
+  margin-top: 18px;
+  padding-top: 14px;
+  border-top: 1px solid var(--line);
 }
 
 .map {
@@ -583,6 +593,16 @@ th {
   padding-right: 6px;
 }
 
+.spatial-timeline {
+  display: grid;
+  grid-auto-flow: column;
+  grid-auto-columns: minmax(280px, 340px);
+  overflow-x: auto;
+  overflow-y: hidden;
+  max-height: none;
+  padding: 4px 2px 8px;
+}
+
 .timeline-item {
   position: relative;
   border: 1px solid var(--line);
@@ -615,6 +635,12 @@ th {
     var(--surface-strong);
   background-size: 200% 200%;
   animation: focusedTimelineGradient 5.4s ease-in-out infinite;
+}
+
+.spatial-timeline .timeline-item::before {
+  inset: 0 20px auto 20px;
+  width: auto;
+  height: 6px;
 }
 
 @keyframes focusedTimelineGradient {
@@ -1135,6 +1161,10 @@ th {
   .timeline {
     max-height: 420px;
   }
+
+  .spatial-timeline {
+    max-height: none;
+  }
 }
 
 @media (max-width: 720px) {
@@ -1225,6 +1255,31 @@ th {
 
   .calendar-cell[data-focused="true"] .calendar-day {
     box-shadow: 0 0 0 4px rgba(245, 228, 0, 0.12), 0 0 20px rgba(245, 228, 0, 0.24);
+  }
+
+  .spatial-venues-panel {
+    margin-top: 14px;
+    padding-top: 12px;
+  }
+
+  .spatial-timeline {
+    grid-auto-flow: row;
+    grid-auto-columns: minmax(0, 1fr);
+    overflow-x: hidden;
+    overflow-y: auto;
+    max-height: 320px;
+    padding-right: 4px;
+    scrollbar-gutter: stable;
+  }
+
+  .spatial-timeline .timeline-item {
+    min-width: 0;
+  }
+
+  .spatial-timeline .timeline-item::before {
+    inset: 20px auto 20px 0;
+    width: 6px;
+    height: auto;
   }
 
   .form-row {

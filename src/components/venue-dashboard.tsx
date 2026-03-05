@@ -109,11 +109,8 @@ export function VenueDashboard({
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
   const [manualMapFocus, setManualMapFocus] = useState<MapFocusState | null>(null);
   const [spatialPanelMode, setSpatialPanelMode] = useState<SpatialPanelMode>("map");
-  const tablePanelRef = useRef<HTMLElement | null>(null);
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const timelineItemRefs = useRef<Record<string, HTMLElement | null>>({});
-  const desktopRowRefs = useRef<Record<string, HTMLTableRowElement | null>>({});
-  const mobileRecordRefs = useRef<Record<string, HTMLElement | null>>({});
   const [message, setMessage] = useState<string>(
     initialMessage ??
       (initialUserEmail ? `サインイン中: ${initialUserEmail}` : "サインインすると会場一覧を表示します。"),
@@ -903,11 +900,12 @@ export function VenueDashboard({
   function updateTimelineFocus() {
     const container = timelineRef.current;
 
-    if (!container || !filteredVenues.length) {
+    if (!container || !filteredVenues.length || typeof window === "undefined") {
       return;
     }
 
-    const containerTop = container.getBoundingClientRect().top;
+    const isMobile = window.matchMedia("(max-width: 720px)").matches;
+    const containerRect = container.getBoundingClientRect();
     let nextVenueId = filteredVenues[0].id;
     let bestDistance = Number.POSITIVE_INFINITY;
 
@@ -918,7 +916,10 @@ export function VenueDashboard({
         continue;
       }
 
-      const distance = Math.abs(element.getBoundingClientRect().top - containerTop);
+      const itemRect = element.getBoundingClientRect();
+      const distance = isMobile
+        ? Math.abs(itemRect.top - containerRect.top)
+        : Math.abs(itemRect.left - containerRect.left);
 
       if (distance < bestDistance) {
         bestDistance = distance;
@@ -945,20 +946,12 @@ export function VenueDashboard({
 
   function scrollToVenueRecord(venueId: string) {
     const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
-    const target = isMobile ? mobileRecordRefs.current[venueId] : desktopRowRefs.current[venueId];
-
-    tablePanelRef.current?.scrollIntoView({
-      behavior: "smooth",
-      block: "start",
-    });
-
-    window.setTimeout(() => {
-      target?.scrollIntoView({
-        behavior: "smooth",
-        block: "center",
-      });
-
-    }, 220);
+    const target = timelineItemRefs.current[venueId];
+    target?.scrollIntoView(
+      isMobile
+        ? { behavior: "smooth", block: "start" }
+        : { behavior: "smooth", inline: "start", block: "nearest" },
+    );
 
     const venue = filteredVenues.find((item) => item.id === venueId);
     if (venue) {
@@ -1168,7 +1161,7 @@ export function VenueDashboard({
         </article>
       </section>
 
-      <main className="workspace-grid">
+      <main className="workspace-grid workspace-grid-single">
         <section className="card map-panel">
           <div className="panel-header">
             <div>
@@ -1215,17 +1208,14 @@ export function VenueDashboard({
               venues={filteredVenues}
             />
           )}
-        </section>
-
-        <aside className="side-stack">
-          <section className="card timeline-panel">
+          <section className="spatial-venues-panel">
             <div className="panel-header">
               <div>
-                <p className="section-label">Timeline</p>
+                <p className="section-label">Venue Focus</p>
                 <h2>利用予定</h2>
               </div>
             </div>
-            <div className="timeline" onScroll={updateTimelineFocus} ref={timelineRef}>
+            <div className="timeline spatial-timeline" onScroll={updateTimelineFocus} ref={timelineRef}>
               {filteredVenues.map((venue) => (
                 <article
                   className="timeline-item"
@@ -1257,10 +1247,10 @@ export function VenueDashboard({
               ) : null}
             </div>
           </section>
-        </aside>
+        </section>
       </main>
 
-      <section className="card table-panel" ref={tablePanelRef}>
+      <section className="card table-panel">
           <div className="panel-header">
             <div>
               <p className="section-label">Table</p>
@@ -1299,9 +1289,6 @@ export function VenueDashboard({
                       <tr
                         key={venue.id}
                         onClick={() => openVenueFromList(venue)}
-                        ref={(element) => {
-                          desktopRowRefs.current[venue.id] = element;
-                        }}
                       >
                         <td data-label="会場名">
                           <div className="venue-cell">
@@ -1359,9 +1346,6 @@ export function VenueDashboard({
                 <article
                   className="mobile-venue-card"
                   key={venue.id}
-                  ref={(element) => {
-                    mobileRecordRefs.current[venue.id] = element;
-                  }}
                 >
                   <button
                     className="mobile-venue-summary"
