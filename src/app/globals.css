@@ -601,6 +601,12 @@ th {
   overflow-y: hidden;
   max-height: none;
   padding: 4px 2px 8px;
+  cursor: grab;
+  touch-action: pan-y;
+}
+
+.spatial-timeline:active {
+  cursor: grabbing;
 }
 
 .timeline-item {

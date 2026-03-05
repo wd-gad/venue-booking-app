@@ -111,6 +111,9 @@ export function VenueDashboard({
   const [spatialPanelMode, setSpatialPanelMode] = useState<SpatialPanelMode>("map");
   const timelineRef = useRef<HTMLDivElement | null>(null);
   const timelineItemRefs = useRef<Record<string, HTMLElement | null>>({});
+  const isTimelineDraggingRef = useRef(false);
+  const timelineDragStartXRef = useRef(0);
+  const timelineDragStartScrollLeftRef = useRef(0);
   const [message, setMessage] = useState<string>(
     initialMessage ??
       (initialUserEmail ? `サインイン中: ${initialUserEmail}` : "サインインすると会場一覧を表示します。"),
@@ -942,12 +945,52 @@ export function VenueDashboard({
       return;
     }
 
-    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+    event.preventDefault();
+    event.stopPropagation();
+    container.scrollLeft += event.deltaY;
+  }
+
+  function handleTimelinePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    if (typeof window === "undefined" || window.matchMedia("(max-width: 720px)").matches) {
       return;
     }
 
-    event.preventDefault();
-    container.scrollLeft += event.deltaY;
+    const container = timelineRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    isTimelineDraggingRef.current = true;
+    timelineDragStartXRef.current = event.clientX;
+    timelineDragStartScrollLeftRef.current = container.scrollLeft;
+    container.setPointerCapture(event.pointerId);
+  }
+
+  function handleTimelinePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (!isTimelineDraggingRef.current) {
+      return;
+    }
+
+    const container = timelineRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    const deltaX = event.clientX - timelineDragStartXRef.current;
+    container.scrollLeft = timelineDragStartScrollLeftRef.current - deltaX;
+  }
+
+  function handleTimelinePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+    const container = timelineRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    isTimelineDraggingRef.current = false;
+    container.releasePointerCapture(event.pointerId);
   }
 
   function focusVenueFromCard(venue: Venue) {
@@ -1237,6 +1280,10 @@ export function VenueDashboard({
             <div
               className="timeline spatial-timeline"
               onScroll={updateTimelineFocus}
+              onPointerDown={handleTimelinePointerDown}
+              onPointerMove={handleTimelinePointerMove}
+              onPointerUp={handleTimelinePointerUp}
+              onPointerCancel={handleTimelinePointerUp}
               onWheel={handleTimelineWheel}
               ref={timelineRef}
             >
