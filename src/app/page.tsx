@@ -1,66 +1,66 @@
-import Image from "next/image";
-import styles from "./page.module.css";
+import { VenueDashboard } from "@/components/venue-dashboard";
+import { hasGoogleAuthEnv, hasSmtpEnv } from "@/lib/auth/env";
+import { getAuthUser } from "@/lib/auth/server";
+import { hasDatabaseUrl } from "@/lib/db/env";
+import { listVenues } from "@/lib/db/repositories/venues";
+import type { Venue } from "@/lib/types";
 
-export default function Home() {
+type HomeProps = {
+  searchParams?: Promise<Record<string, string | string[] | undefined>>;
+};
+
+export default async function Home({ searchParams }: HomeProps) {
+  const databaseEnabled = hasDatabaseUrl();
+  const resolvedSearchParams = searchParams ? await searchParams : {};
+  const user = await getAuthUser();
+
+  let initialUserEmail: string | null = null;
+  let initialVenues: Venue[] = [];
+  let initialMessage: string | null = null;
+
+  const authError =
+    typeof resolvedSearchParams.authError === "string"
+      ? resolvedSearchParams.authError
+      : typeof resolvedSearchParams.error === "string"
+        ? resolvedSearchParams.error
+        : null;
+  const authErrorDescription =
+    typeof resolvedSearchParams.authErrorDescription === "string"
+      ? resolvedSearchParams.authErrorDescription
+      : typeof resolvedSearchParams.message === "string"
+        ? resolvedSearchParams.message
+        : null;
+
+  if (authError) {
+    initialMessage = authErrorDescription && typeof authErrorDescription === "string"
+      ? decodeURIComponent(authErrorDescription)
+      : `認証に失敗しました: ${authError}`;
+  }
+
+  initialUserEmail = user?.email ?? null;
+
+  if (user && databaseEnabled) {
+    initialVenues = await listVenues();
+  }
+
+  if (!initialMessage) {
+    if (!databaseEnabled) {
+      initialMessage = "DATABASE_URL が未設定のため、会場データを読み込めません。";
+    } else if (user?.email) {
+      initialMessage = `サインイン中: ${user.email}`;
+    } else {
+      initialMessage = "サインインすると会場一覧を表示します。";
+    }
+  }
+
   return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <Image
-          className={styles.logo}
-          src="/next.svg"
-          alt="Next.js logo"
-          width={100}
-          height={20}
-          priority
-        />
-        <div className={styles.intro}>
-          <h1>To get started, edit the page.tsx file.</h1>
-          <p>
-            Looking for a starting point or more instructions? Head over to{" "}
-            <a
-              href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Templates
-            </a>{" "}
-            or the{" "}
-            <a
-              href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-              target="_blank"
-              rel="noopener noreferrer"
-            >
-              Learning
-            </a>{" "}
-            center.
-          </p>
-        </div>
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={16}
-              height={16}
-            />
-            Deploy Now
-          </a>
-          <a
-            className={styles.secondary}
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Documentation
-          </a>
-        </div>
-      </main>
-    </div>
+    <VenueDashboard
+      initialMessage={initialMessage}
+      initialUserEmail={initialUserEmail}
+      initialVenues={initialVenues}
+      databaseEnabled={databaseEnabled}
+      googleAuthEnabled={hasGoogleAuthEnv()}
+      magicLinkEnabled={hasSmtpEnv()}
+    />
   );
 }

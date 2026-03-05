@@ -1,0 +1,26 @@
+<svg width="256" height="256" viewBox="0 0 256 256" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="256" height="256" rx="64" fill="url(#bg)"/>
+  <rect x="40" y="56" width="124" height="144" rx="28" fill="#FFF8EE" fill-opacity="0.94"/>
+  <rect x="40" y="56" width="124" height="36" rx="28" fill="#0E7C86"/>
+  <rect x="62" y="40" width="12" height="34" rx="6" fill="#FFF8EE"/>
+  <rect x="130" y="40" width="12" height="34" rx="6" fill="#FFF8EE"/>
+  <rect x="62" y="112" width="28" height="20" rx="8" fill="#D96C3D" fill-opacity="0.9"/>
+  <rect x="100" y="112" width="42" height="20" rx="8" fill="#0E7C86" fill-opacity="0.2"/>
+  <rect x="62" y="144" width="80" height="16" rx="8" fill="#0E7C86" fill-opacity="0.16"/>
+  <rect x="62" y="168" width="52" height="16" rx="8" fill="#0E7C86" fill-opacity="0.12"/>
+  <path d="M181.663 96C156.997 96 137 115.769 137 140.154C137 177.385 181.663 214 181.663 214C181.663 214 226.326 177.385 226.326 140.154C226.326 115.769 206.329 96 181.663 96Z" fill="url(#pin)"/>
+  <circle cx="181.663" cy="140" r="18" fill="#FFF8EE"/>
+  <circle cx="181.663" cy="140" r="8" fill="#0E7C86"/>
+  <defs>
+    <linearGradient id="bg" x1="24" y1="18" x2="228" y2="234" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0E7C86"/>
+      <stop offset="0.58" stop-color="#157E72"/>
+      <stop offset="1" stop-color="#D96C3D"/>
+    </linearGradient>
+    <linearGradient id="pin" x1="152" y1="102" x2="215" y2="209" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#FFF3D9"/>
+      <stop offset="0.52" stop-color="#D96C3D"/>
+      <stop offset="1" stop-color="#A94725"/>
+    </linearGradient>
+  </defs>
+</svg>

@@ -1,0 +1,24 @@
+<svg width="1080" height="1080" viewBox="0 0 1080 1080" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <rect width="1080" height="1080" fill="#0A0A0A"/>
+  <g opacity="0.34" stroke="#8A8580" stroke-width="7">
+    <circle cx="540" cy="540" r="430"/>
+    <ellipse cx="540" cy="540" rx="430" ry="150"/>
+    <ellipse cx="540" cy="540" rx="430" ry="250"/>
+    <ellipse cx="540" cy="540" rx="430" ry="340"/>
+    <ellipse cx="540" cy="540" rx="330" ry="430"/>
+    <ellipse cx="540" cy="540" rx="230" ry="430"/>
+    <ellipse cx="540" cy="540" rx="130" ry="430"/>
+    <path d="M110 540H970"/>
+    <path d="M540 110C628 204 678 362 678 540C678 718 628 876 540 970"/>
+    <path d="M540 110C452 204 402 362 402 540C402 718 452 876 540 970"/>
+  </g>
+  <text x="540" y="312" text-anchor="middle" fill="#F4F1E4" font-family="Arial Black, Arial, sans-serif" font-size="112" font-weight="900">
+    Fitness World Japan
+  </text>
+  <text x="540" y="646" text-anchor="middle" fill="#F5E400" stroke="#111111" stroke-width="10" paint-order="stroke" font-family="Arial Black, Arial, sans-serif" font-size="380" font-style="italic" font-weight="900" letter-spacing="-18">
+    FWJ
+  </text>
+  <text x="540" y="812" text-anchor="middle" fill="#F4F1E4" font-family="Arial Black, Arial, sans-serif" font-size="56" font-weight="900">
+    Bodybuilding  Bikini  Physique  Classic Physique  Figure
+  </text>
+</svg>

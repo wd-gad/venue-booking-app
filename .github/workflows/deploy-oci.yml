@@ -1,0 +1,45 @@
+name: Deploy OCI
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Sync project files to OCI
+        uses: appleboy/scp-action@v0.1.7
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          source: "."
+          target: "/home/ubuntu/next-app"
+          overwrite: true
+          strip_components: 0
+          tar_tmp_path: "/tmp"
+          tar_exec: "tar"
+          exclude: ".git,.github,.next,node_modules,.env.local,.env.oci,backups"
+
+      - name: Build and restart app on OCI
+        uses: appleboy/ssh-action@v1.2.2
+        with:
+          host: ${{ secrets.OCI_HOST }}
+          username: ${{ secrets.OCI_USERNAME }}
+          key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+          script_stop: true
+          command_timeout: 30m
+          script: |
+            cd /home/ubuntu/next-app
+            export $(grep -v '^#' .env.oci | xargs)
+            npm ci
+            npm run db:push -- --force
+            npm run build
+            sudo systemctl restart venue-booking-app.service
+            sudo systemctl is-active --quiet venue-booking-app.service

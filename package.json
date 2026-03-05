@@ -1,22 +1,44 @@
 {
-  "name": "next-app",
+  "name": "venue-booking-manager",
   "version": "0.1.0",
   "private": true,
   "scripts": {
     "dev": "next dev",
+    "dev:lan": "next dev --hostname 0.0.0.0 --port 3002",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "auth:generate": "better-auth generate --config src/lib/auth/server.ts --output src/lib/db/better-auth-schema.ts",
+    "auth:migrate": "better-auth migrate --config src/lib/auth/server.ts -y",
+    "db:generate": "drizzle-kit generate",
+    "db:push": "drizzle-kit push",
+    "db:studio": "drizzle-kit studio"
   },
   "dependencies": {
+    "@aws-sdk/client-s3": "^3.1001.0",
+    "@aws-sdk/s3-request-presigner": "^3.1001.0",
+    "@better-auth/cli": "^1.4.21",
+    "@better-auth/drizzle-adapter": "^1.5.3",
+    "@supabase/ssr": "^0.8.0",
+    "@supabase/supabase-js": "^2.98.0",
+    "@types/leaflet": "^1.9.21",
+    "better-auth": "^1.5.3",
+    "dotenv": "^17.3.1",
+    "drizzle-orm": "^0.45.1",
+    "leaflet": "^1.9.4",
     "next": "16.1.6",
+    "nodemailer": "^8.0.1",
+    "pg": "^8.19.0",
     "react": "19.2.3",
-    "react-dom": "19.2.3"
+    "react-dom": "19.2.3",
+    "react-leaflet": "^5.0.0"
   },
   "devDependencies": {
     "@types/node": "^20",
+    "@types/pg": "^8.18.0",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "drizzle-kit": "^0.31.9",
     "eslint": "^9",
     "eslint-config-next": "16.1.6",
     "typescript": "^5"

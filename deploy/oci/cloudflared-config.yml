@@ -1,0 +1,9 @@
+tunnel: d82511bf-dee6-4fc3-aab2-9cb839bbb1f7
+credentials-file: /etc/cloudflared/d82511bf-dee6-4fc3-aab2-9cb839bbb1f7.json
+
+ingress:
+  - hostname: app.tekamaki.org
+    service: http://127.0.0.1:3000
+  - hostname: supabase.tekamaki.org
+    service: http://127.0.0.1:54321
+  - service: http_status:404

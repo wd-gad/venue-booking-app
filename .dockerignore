@@ -1,0 +1,10 @@
+.git
+.gitignore
+.next
+node_modules
+npm-debug.log
+.env.local
+.env.oci
+.env.oci.postgres
+.DS_Store
+coverage
