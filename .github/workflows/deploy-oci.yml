@@ -13,18 +13,26 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Sync project files to OCI
-        uses: appleboy/scp-action@v0.1.7
+      - name: Setup SSH key
+        uses: webfactory/ssh-agent@v0.9.0
         with:
-          host: ${{ secrets.OCI_HOST }}
-          username: ${{ secrets.OCI_USERNAME }}
-          key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
-          source: "."
-          target: "/home/ubuntu/next-app"
-          overwrite: true
-          strip_components: 0
-          tar_tmp_path: "/tmp"
-          tar_exec: "tar"
+          ssh-private-key: ${{ secrets.OCI_SSH_PRIVATE_KEY }}
+
+      - name: Sync project files to OCI
+        env:
+          OCI_HOST: ${{ secrets.OCI_HOST }}
+          OCI_USERNAME: ${{ secrets.OCI_USERNAME }}
+        run: |
+          rsync -az --delete \
+            --exclude ".git/" \
+            --exclude ".github/" \
+            --exclude ".next/" \
+            --exclude "node_modules/" \
+            --exclude ".env.local" \
+            --exclude ".env.oci" \
+            --exclude "backups/" \
+            -e "ssh -o StrictHostKeyChecking=no" \
+            ./ "${OCI_USERNAME}@${OCI_HOST}:/home/ubuntu/next-app/"
 
       - name: Build and restart app on OCI
         uses: appleboy/ssh-action@v1.2.2
