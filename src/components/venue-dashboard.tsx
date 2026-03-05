@@ -931,6 +931,25 @@ export function VenueDashboard({
     setFocusedTimelineVenueId((current) => (current === nextVenueId ? current : nextVenueId));
   }
 
+  function handleTimelineWheel(event: React.WheelEvent<HTMLDivElement>) {
+    if (typeof window === "undefined" || window.matchMedia("(max-width: 720px)").matches) {
+      return;
+    }
+
+    const container = timelineRef.current;
+
+    if (!container) {
+      return;
+    }
+
+    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
+      return;
+    }
+
+    event.preventDefault();
+    container.scrollLeft += event.deltaY;
+  }
+
   function focusVenueFromCard(venue: Venue) {
     setFocusedTimelineVenueId(venue.id);
     setManualMapFocus({
@@ -1215,7 +1234,12 @@ export function VenueDashboard({
                 <h2>利用予定</h2>
               </div>
             </div>
-            <div className="timeline spatial-timeline" onScroll={updateTimelineFocus} ref={timelineRef}>
+            <div
+              className="timeline spatial-timeline"
+              onScroll={updateTimelineFocus}
+              onWheel={handleTimelineWheel}
+              ref={timelineRef}
+            >
               {filteredVenues.map((venue) => (
                 <article
                   className="timeline-item"
