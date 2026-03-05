@@ -15,6 +15,7 @@ export default async function Home({ searchParams }: HomeProps) {
   const user = await getAuthUser();
 
   let initialUserEmail: string | null = null;
+  let initialUserName: string | null = null;
   let initialVenues: Venue[] = [];
   let initialMessage: string | null = null;
 
@@ -38,6 +39,7 @@ export default async function Home({ searchParams }: HomeProps) {
   }
 
   initialUserEmail = user?.email ?? null;
+  initialUserName = user?.name ?? null;
 
   if (user && databaseEnabled) {
     initialVenues = await listVenues();
@@ -46,8 +48,8 @@ export default async function Home({ searchParams }: HomeProps) {
   if (!initialMessage) {
     if (!databaseEnabled) {
       initialMessage = "DATABASE_URL が未設定のため、会場データを読み込めません。";
-    } else if (user?.email) {
-      initialMessage = `サインイン中: ${user.email}`;
+    } else if (user?.name || user?.email) {
+      initialMessage = `サインイン中: ${user?.name ?? user?.email}`;
     } else {
       initialMessage = "サインインすると会場一覧を表示します。";
     }
@@ -57,6 +59,7 @@ export default async function Home({ searchParams }: HomeProps) {
     <VenueDashboard
       initialMessage={initialMessage}
       initialUserEmail={initialUserEmail}
+      initialUserName={initialUserName}
       initialVenues={initialVenues}
       databaseEnabled={databaseEnabled}
       googleAuthEnabled={hasGoogleAuthEnv()}

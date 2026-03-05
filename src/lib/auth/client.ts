@@ -1,12 +1,25 @@
 "use client";
 
 import { createAuthClient } from "better-auth/react";
-import { magicLinkClient } from "better-auth/client/plugins";
+import { emailOTPClient, magicLinkClient } from "better-auth/client/plugins";
 
 function resolveAuthBaseUrl() {
   const configured = process.env.NEXT_PUBLIC_BETTER_AUTH_URL;
 
   if (configured?.startsWith("http://") || configured?.startsWith("https://")) {
+    if (typeof window !== "undefined") {
+      try {
+        const configuredUrl = new URL(configured);
+        const localHosts = new Set(["127.0.0.1", "localhost", "0.0.0.0"]);
+
+        if (localHosts.has(configuredUrl.hostname)) {
+          return `${window.location.origin}${configuredUrl.pathname}`;
+        }
+      } catch {
+        // Fall back to configured value when URL parsing fails.
+      }
+    }
+
     return configured;
   }
 
@@ -29,5 +42,5 @@ function resolveAuthBaseUrl() {
 
 export const authClient = createAuthClient({
   baseURL: resolveAuthBaseUrl(),
-  plugins: [magicLinkClient()],
+  plugins: [magicLinkClient(), emailOTPClient()],
 });

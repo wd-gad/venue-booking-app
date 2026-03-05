@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type { Venue } from "@/lib/types";
 
 type VenueCalendarProps = {
@@ -42,11 +42,22 @@ const HOLIDAYS_2026 = new Map<string, string>([
 
 export function VenueCalendar({ focusVenue, onVenueSelect, venues }: VenueCalendarProps) {
   const [selectedCell, setSelectedCell] = useState<CalendarCell | null>(null);
+  const [visibleMonth, setVisibleMonth] = useState<Date | null>(null);
+  const [dragOffsetX, setDragOffsetX] = useState(0);
+  const [isDragAnimating, setIsDragAnimating] = useState(false);
+  const dragStartXRef = useRef<number | null>(null);
+  const dragDeltaXRef = useRef(0);
+  const suppressClickRef = useRef(false);
 
-  const monthStart = useMemo(() => {
+  const baseMonthStart = useMemo(() => {
     const baseDate = focusVenue ? new Date(focusVenue.event_date) : new Date();
     return new Date(baseDate.getFullYear(), baseDate.getMonth(), 1);
   }, [focusVenue]);
+  const monthStart = visibleMonth ?? baseMonthStart;
+
+  useEffect(() => {
+    setVisibleMonth(baseMonthStart);
+  }, [baseMonthStart]);
 
   const monthLabel = new Intl.DateTimeFormat("ja-JP", {
     year: "numeric",
@@ -83,12 +94,84 @@ export function VenueCalendar({ focusVenue, onVenueSelect, venues }: VenueCalend
     });
   }, [monthStart, venues]);
 
+  function moveMonth(offset: number) {
+    setVisibleMonth((current) => addMonths(current ?? monthStart, offset));
+  }
+
+  function handleSurfacePointerDown(event: React.PointerEvent<HTMLDivElement>) {
+    dragStartXRef.current = event.clientX;
+    dragDeltaXRef.current = 0;
+    setIsDragAnimating(false);
+  }
+
+  function handleSurfacePointerMove(event: React.PointerEvent<HTMLDivElement>) {
+    if (dragStartXRef.current === null) {
+      return;
+    }
+
+    dragDeltaXRef.current = event.clientX - dragStartXRef.current;
+    const visualOffset = Math.max(-72, Math.min(72, dragDeltaXRef.current * 0.34));
+    setDragOffsetX(visualOffset);
+  }
+
+  function handleSurfacePointerUp() {
+    if (dragStartXRef.current === null) {
+      return;
+    }
+
+    const deltaX = dragDeltaXRef.current;
+    dragStartXRef.current = null;
+    dragDeltaXRef.current = 0;
+    setIsDragAnimating(true);
+    setDragOffsetX(0);
+
+    if (Math.abs(deltaX) < 70) {
+      return;
+    }
+
+    suppressClickRef.current = true;
+    window.setTimeout(() => {
+      suppressClickRef.current = false;
+    }, 150);
+
+    moveMonth(deltaX < 0 ? 1 : -1);
+  }
+
   return (
-    <div className="calendar-surface">
+    <div
+      className="calendar-surface"
+      onPointerCancel={handleSurfacePointerUp}
+      onPointerDown={handleSurfacePointerDown}
+      onPointerMove={handleSurfacePointerMove}
+      onPointerUp={handleSurfacePointerUp}
+    >
       <div className="calendar-toolbar">
         <div>
           <p className="section-label">Calendar</p>
           <h3>{monthLabel}</h3>
+        </div>
+        <div className="auth-actions">
+          <button
+            className="table-button"
+            onClick={() => moveMonth(-1)}
+            type="button"
+          >
+            前月
+          </button>
+          <button
+            className="table-button"
+            onClick={() => setVisibleMonth(new Date())}
+            type="button"
+          >
+            今月
+          </button>
+          <button
+            className="table-button"
+            onClick={() => moveMonth(1)}
+            type="button"
+          >
+            次月
+          </button>
         </div>
         {focusVenue ? (
           <p className="calendar-focus-note">
@@ -100,49 +183,58 @@ export function VenueCalendar({ focusVenue, onVenueSelect, venues }: VenueCalend
         ) : null}
       </div>
 
-      <div className="calendar-weekdays">
-        {WEEKDAY_LABELS.map((label, index) => (
-          <span data-day-type={index === 0 ? "sunday" : index === 6 ? "saturday" : "weekday"} key={label}>
-            {label}
-          </span>
-        ))}
-      </div>
+      <div
+        className="calendar-drag-body"
+        data-animating={isDragAnimating}
+        style={{ transform: `translate3d(${dragOffsetX}px, 0, 0)` }}
+      >
+        <div className="calendar-weekdays">
+          {WEEKDAY_LABELS.map((label, index) => (
+            <span data-day-type={index === 0 ? "sunday" : index === 6 ? "saturday" : "weekday"} key={label}>
+              {label}
+            </span>
+          ))}
+        </div>
 
-      <div className="calendar-grid">
-        {cells.map((cell) => {
-          const isFocused = focusVenue?.event_date === cell.isoDate;
+        <div className="calendar-grid">
+          {cells.map((cell) => {
+            const isFocused = focusVenue?.event_date === cell.isoDate;
 
-          return (
-            <button
-              className="calendar-cell"
-              data-day-type={cell.dayType}
-              data-focused={isFocused}
-              data-has-venue={cell.venues.length > 0}
-              data-in-month={cell.inMonth}
-              key={cell.isoDate}
-              onClick={() => {
-                if (cell.venues.length) {
-                  setSelectedCell(cell);
-                }
-              }}
-              type="button"
-            >
-              <div className="calendar-cell-head">
-                <span className="calendar-day">{cell.date.getDate()}</span>
-                {cell.venues.length ? <span className="calendar-count">{cell.venues.length}</span> : null}
-              </div>
-              <div className="calendar-cell-body">
-                {cell.holidayName ? <div className="calendar-holiday-name">{cell.holidayName}</div> : null}
-                {cell.venues.slice(0, 2).map((venue) => (
-                  <div className="calendar-venue-chip" data-status={venue.status} key={venue.id}>
-                    <span>{venue.name}</span>
-                  </div>
-                ))}
-                {cell.venues.length > 2 ? <div className="calendar-more">+{cell.venues.length - 2}</div> : null}
-              </div>
-            </button>
-          );
-        })}
+            return (
+              <button
+                className="calendar-cell"
+                data-day-type={cell.dayType}
+                data-focused={isFocused}
+                data-has-venue={cell.venues.length > 0}
+                data-in-month={cell.inMonth}
+                key={cell.isoDate}
+                onClick={() => {
+                  if (suppressClickRef.current) {
+                    return;
+                  }
+                  if (cell.venues.length) {
+                    setSelectedCell(cell);
+                  }
+                }}
+                type="button"
+              >
+                <div className="calendar-cell-head">
+                  <span className="calendar-day">{cell.date.getDate()}</span>
+                  {cell.venues.length ? <span className="calendar-count">{cell.venues.length}</span> : null}
+                </div>
+                <div className="calendar-cell-body">
+                  {cell.holidayName ? <div className="calendar-holiday-name">{cell.holidayName}</div> : null}
+                  {cell.venues.slice(0, 2).map((venue) => (
+                    <div className="calendar-venue-chip" data-status={venue.status} key={venue.id}>
+                      <span>{venue.name}</span>
+                    </div>
+                  ))}
+                  {cell.venues.length > 2 ? <div className="calendar-more">+{cell.venues.length - 2}</div> : null}
+                </div>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {selectedCell ? (
@@ -194,4 +286,8 @@ function formatIsoDate(date: Date) {
   const month = `${date.getMonth() + 1}`.padStart(2, "0");
   const day = `${date.getDate()}`.padStart(2, "0");
   return `${year}-${month}-${day}`;
+}
+
+function addMonths(date: Date, offset: number) {
+  return new Date(date.getFullYear(), date.getMonth() + offset, 1);
 }

@@ -188,6 +188,37 @@ th {
   background: rgba(255, 255, 255, 0.03);
 }
 
+.profile-card {
+  display: grid;
+  gap: 10px;
+}
+
+.profile-details {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.profile-name {
+  min-width: 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 0.92rem;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.profile-chip-button {
+  width: 100%;
+  border: 1px solid var(--line);
+  text-align: left;
+  cursor: pointer;
+}
+
+.profile-chip-button:hover {
+  border-color: rgba(245, 228, 0, 0.34);
+}
+
 .profile-avatar {
   display: grid;
   place-items: center;
@@ -410,6 +441,7 @@ th {
   padding: 18px;
   display: grid;
   gap: 14px;
+  touch-action: pan-y;
 }
 
 .calendar-toolbar {
@@ -422,6 +454,16 @@ th {
 .calendar-focus-note {
   color: var(--muted);
   font-size: 0.9rem;
+}
+
+.calendar-drag-body {
+  display: grid;
+  gap: 14px;
+  will-change: transform;
+}
+
+.calendar-drag-body[data-animating="true"] {
+  transition: transform 220ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .calendar-weekdays,

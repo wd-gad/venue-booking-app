@@ -7,7 +7,7 @@ export const venues = pgTable(
   "venues",
   {
     id: uuid("id").defaultRandom().primaryKey(),
-    ownerId: uuid("owner_id"),
+    ownerId: uuid("user_id"),
     name: text("name").notNull(),
     address: text("address").notNull(),
     eventDate: date("event_date").notNull(),

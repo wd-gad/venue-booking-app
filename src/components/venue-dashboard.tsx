@@ -18,6 +18,7 @@ type VenueDashboardProps = {
   initialMessage?: string | null;
   initialVenues: Venue[];
   initialUserEmail: string | null;
+  initialUserName: string | null;
   magicLinkEnabled: boolean;
 };
 
@@ -36,7 +37,8 @@ type DetailState = {
   permit_file_name: string | null;
   conversation_notes: VenueNote[];
 };
-type AuthMode = "password" | "magic-link";
+type AuthMode = "password" | "magic-link" | "email-otp";
+type PasswordAuthIntent = "sign-in" | "sign-up";
 type CsvConflictMode = "overwrite" | "alternative";
 type CsvRowPlan =
   | { kind: "insert"; venue: VenueInput }
@@ -81,9 +83,12 @@ export function VenueDashboard({
   initialMessage,
   initialVenues,
   initialUserEmail,
+  initialUserName,
   magicLinkEnabled,
 }: VenueDashboardProps) {
   const MOBILE_CARD_FOCUS_ZOOM = 12;
+  const MOBILE_CARD_FOCUS_MAX_ZOOM = 17;
+  const MOBILE_CARD_FOCUS_STEP = 2;
   const {
     data: sessionData,
     isPending: sessionPending,
@@ -101,9 +106,20 @@ export function VenueDashboard({
   const [toastMessage, setToastMessage] = useState<string | null>(null);
   const toastTimerRef = useRef<number | null>(null);
   const [userEmail, setUserEmail] = useState<string | null>(initialUserEmail);
+  const [userName, setUserName] = useState<string | null>(initialUserName);
   const [authMode, setAuthMode] = useState<AuthMode>("password");
+  const [passwordAuthIntent, setPasswordAuthIntent] = useState<PasswordAuthIntent>("sign-in");
+  const [authFirstName, setAuthFirstName] = useState("");
+  const [authLastName, setAuthLastName] = useState("");
   const [authEmail, setAuthEmail] = useState("");
   const [authPassword, setAuthPassword] = useState("");
+  const [authOtp, setAuthOtp] = useState("");
+  const [otpRequested, setOtpRequested] = useState(false);
+  const [showMailInboxLink, setShowMailInboxLink] = useState(false);
+  const [isEditingProfile, setIsEditingProfile] = useState(false);
+  const [profileFirstName, setProfileFirstName] = useState(() => splitPersonName(initialUserName).firstName);
+  const [profileLastName, setProfileLastName] = useState(() => splitPersonName(initialUserName).lastName);
+  const [profileSaving, setProfileSaving] = useState(false);
   const [loading, startTransition] = useTransition();
   const [pendingCsvImport, setPendingCsvImport] = useState<PendingCsvImport | null>(null);
   const [isManageModalOpen, setIsManageModalOpen] = useState(false);
@@ -114,9 +130,15 @@ export function VenueDashboard({
   const isTimelineDraggingRef = useRef(false);
   const timelineDragStartXRef = useRef(0);
   const timelineDragStartScrollLeftRef = useRef(0);
+  const timelineDragMovedRef = useRef(false);
+  const timelineSuppressClickUntilRef = useRef(0);
+  const lastCardZoomFocusRef = useRef<{ venueId: string; zoom: number } | null>(null);
+  const lastCardManualFocusAtRef = useRef(0);
   const [message, setMessage] = useState<string>(
     initialMessage ??
-      (initialUserEmail ? `サインイン中: ${initialUserEmail}` : "サインインすると会場一覧を表示します。"),
+      (initialUserName || initialUserEmail
+        ? `サインイン中: ${initialUserName ?? initialUserEmail}`
+        : "サインインすると会場一覧を表示します。"),
   );
   const detailAutosaveTimerRef = useRef<number | null>(null);
   const detailSaveInFlightRef = useRef(false);
@@ -130,8 +152,9 @@ export function VenueDashboard({
 
     startTransition(() => {
       setUserEmail(currentUser?.email ?? null);
+      setUserName(currentUser?.name ?? null);
     });
-    void syncSessionState(setUserEmail, setVenues, setMessage, databaseEnabled, currentUser);
+    void syncSessionState(setUserName, setUserEmail, setVenues, setMessage, databaseEnabled, currentUser);
   }, [currentUser, databaseEnabled, sessionPending, startTransition]);
 
   useEffect(() => {
@@ -144,6 +167,14 @@ export function VenueDashboard({
       }
     };
   }, []);
+
+  useEffect(() => {
+    if (!isEditingProfile) {
+      const nameParts = splitPersonName(userName);
+      setProfileFirstName(nameParts.firstName);
+      setProfileLastName(nameParts.lastName);
+    }
+  }, [isEditingProfile, userName]);
 
   const filteredVenues = useMemo(() => {
     return [...venues]
@@ -162,6 +193,13 @@ export function VenueDashboard({
   const mapFocusZoom = manualMapFocus?.zoom ?? 8;
   const selectedVenue =
     detailState ? venues.find((venue) => venue.id === detailState.venueId) ?? null : null;
+  const localMailInboxUrl = useMemo(() => {
+    if (typeof window === "undefined") {
+      return "http://127.0.0.1:8025";
+    }
+
+    return `http://${window.location.hostname}:8025`;
+  }, []);
 
   useEffect(() => {
     setFocusedTimelineVenueId((current) =>
@@ -242,7 +280,9 @@ export function VenueDashboard({
   async function handleEmailAuthSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
 
-    if (!authEmail.trim()) {
+    const email = authEmail.trim();
+
+    if (!email) {
       setMessage("メールアドレスを入力してください。");
       return;
     }
@@ -250,20 +290,67 @@ export function VenueDashboard({
     if (authMode === "magic-link") {
       if (!magicLinkEnabled) {
         setMessage("マジックリンクは SMTP 未設定のため無効です。");
+        setShowMailInboxLink(false);
         return;
       }
 
       const { error } = await authClient.signIn.magicLink({
-        email: authEmail.trim(),
+        email,
         callbackURL: window.location.origin,
       });
 
       if (error) {
         setMessage(`マジックリンク送信に失敗しました: ${error.message}`);
+        setShowMailInboxLink(false);
         return;
       }
 
       setMessage("マジックリンクを送信しました。ローカルでは Mailpit を確認してください。");
+      setShowMailInboxLink(true);
+      return;
+    }
+
+    if (authMode === "email-otp") {
+      if (!magicLinkEnabled) {
+        setMessage("メールOTPは SMTP 未設定のため無効です。");
+        setShowMailInboxLink(false);
+        return;
+      }
+
+      if (!authOtp.trim()) {
+        const sendOtpResult = await authClient.emailOtp.sendVerificationOtp({
+          email,
+          type: "sign-in",
+        });
+
+        if (sendOtpResult.error) {
+          setMessage(`OTP送信に失敗しました: ${sendOtpResult.error.message}`);
+          setShowMailInboxLink(false);
+          return;
+        }
+
+        setOtpRequested(true);
+        setMessage("認証コードを送信しました。メールを確認して6桁コードを入力してください。");
+        setShowMailInboxLink(true);
+        return;
+      }
+
+      const signInWithOtpResult = await authClient.signIn.emailOtp({
+        email,
+        otp: authOtp.trim(),
+        name: normalizeFullName(authFirstName, authLastName) || email.split("@")[0] || email,
+      });
+
+      if (signInWithOtpResult.error) {
+        setMessage(`OTP認証に失敗しました: ${signInWithOtpResult.error.message}`);
+        return;
+      }
+
+      await refetchSession();
+      setAuthOtp("");
+      setOtpRequested(false);
+      setShowMailInboxLink(false);
+      setMessage("OTPでサインインしました。未登録メールの場合は自動でアカウントを作成します。");
       return;
     }
 
@@ -272,31 +359,56 @@ export function VenueDashboard({
       return;
     }
 
-    const signInResult = await authClient.signIn.email({
-      email: authEmail.trim(),
-      password: authPassword,
-    });
+    if (passwordAuthIntent === "sign-up") {
+      const firstName = authFirstName.trim();
+      const lastName = authLastName.trim();
+      const displayName = normalizeFullName(firstName, lastName);
 
-    if (!signInResult.error) {
+      if (!firstName || !lastName) {
+        setMessage("新規登録には FirstName と LastName の両方を入力してください。");
+        return;
+      }
+
+      if (!isHalfWidthName(firstName) || !isHalfWidthName(lastName)) {
+        setMessage("FirstName / LastName は半角文字のみで入力してください。");
+        return;
+      }
+
+      const signUpResult = await authClient.signUp.email({
+        name: displayName,
+        email,
+        password: authPassword,
+        callbackURL: window.location.origin,
+      });
+
+      if (signUpResult.error) {
+        setMessage(`新規登録に失敗しました: ${signUpResult.error.message}`);
+        setShowMailInboxLink(false);
+        return;
+      }
+
       await refetchSession();
-      setMessage("メールアドレスでサインインしました。");
+      setAuthFirstName("");
+      setAuthLastName("");
+      setShowMailInboxLink(false);
+      setMessage("ユーザーを登録してサインインしました。");
       return;
     }
 
-    const signUpResult = await authClient.signUp.email({
-      name: authEmail.trim().split("@")[0] || authEmail.trim(),
-      email: authEmail.trim(),
+    const signInResult = await authClient.signIn.email({
+      email,
       password: authPassword,
-      callbackURL: window.location.origin,
     });
 
-    if (signUpResult.error) {
-      setMessage(`メール認証に失敗しました: ${signUpResult.error.message}`);
+    if (signInResult.error) {
+      setMessage(`サインインに失敗しました: ${signInResult.error.message}`);
+      setShowMailInboxLink(false);
       return;
     }
 
     await refetchSession();
-    setMessage("ユーザーを作成してサインインしました。");
+    setShowMailInboxLink(false);
+    setMessage("メールアドレスでサインインしました。");
   }
 
   async function signOut() {
@@ -308,8 +420,49 @@ export function VenueDashboard({
 
     await refetchSession();
     setUserEmail(null);
+    setUserName(null);
     setVenues([]);
+    setIsEditingProfile(false);
+    setProfileFirstName("");
+    setProfileLastName("");
     setMessage("サインアウトしました。");
+  }
+
+  async function saveProfileName() {
+    if (!currentUser) {
+      setMessage("プロフィール更新にはサインインが必要です。");
+      return;
+    }
+
+    const firstName = profileFirstName.trim();
+    const lastName = profileLastName.trim();
+    const nextName = normalizeFullName(firstName, lastName);
+
+    if (!firstName || !lastName) {
+      setMessage("FirstName と LastName の両方を入力してください。");
+      return;
+    }
+
+    if (!isHalfWidthName(firstName) || !isHalfWidthName(lastName)) {
+      setMessage("FirstName / LastName は半角文字のみで入力してください。");
+      return;
+    }
+
+    setProfileSaving(true);
+    const result = await authClient.updateUser({
+      name: nextName,
+    });
+    setProfileSaving(false);
+
+    if (result.error) {
+      setMessage(`プロフィール更新に失敗しました: ${result.error.message}`);
+      return;
+    }
+
+    setUserName(nextName);
+    setIsEditingProfile(false);
+    await refetchSession();
+    setMessage(`プロフィールを更新しました: ${nextName}`);
   }
 
   async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
@@ -907,6 +1060,14 @@ export function VenueDashboard({
       return;
     }
 
+    if (isTimelineDraggingRef.current) {
+      return;
+    }
+
+    if (Date.now() - lastCardManualFocusAtRef.current < 420) {
+      return;
+    }
+
     const isMobile = window.matchMedia("(max-width: 720px)").matches;
     const containerRect = container.getBoundingClientRect();
     let nextVenueId = filteredVenues[0].id;
@@ -951,7 +1112,11 @@ export function VenueDashboard({
   }
 
   function handleTimelinePointerDown(event: React.PointerEvent<HTMLDivElement>) {
-    if (typeof window === "undefined" || window.matchMedia("(max-width: 720px)").matches) {
+    if (
+      typeof window === "undefined" ||
+      window.matchMedia("(max-width: 720px)").matches ||
+      event.pointerType !== "mouse"
+    ) {
       return;
     }
 
@@ -962,9 +1127,9 @@ export function VenueDashboard({
     }
 
     isTimelineDraggingRef.current = true;
+    timelineDragMovedRef.current = false;
     timelineDragStartXRef.current = event.clientX;
     timelineDragStartScrollLeftRef.current = container.scrollLeft;
-    container.setPointerCapture(event.pointerId);
   }
 
   function handleTimelinePointerMove(event: React.PointerEvent<HTMLDivElement>) {
@@ -979,10 +1144,13 @@ export function VenueDashboard({
     }
 
     const deltaX = event.clientX - timelineDragStartXRef.current;
+    if (Math.abs(deltaX) > 12) {
+      timelineDragMovedRef.current = true;
+    }
     container.scrollLeft = timelineDragStartScrollLeftRef.current - deltaX;
   }
 
-  function handleTimelinePointerUp(event: React.PointerEvent<HTMLDivElement>) {
+  function handleTimelinePointerUp() {
     const container = timelineRef.current;
 
     if (!container) {
@@ -990,14 +1158,29 @@ export function VenueDashboard({
     }
 
     isTimelineDraggingRef.current = false;
-    container.releasePointerCapture(event.pointerId);
+
+    if (timelineDragMovedRef.current) {
+      timelineSuppressClickUntilRef.current = Date.now() + 180;
+      updateTimelineFocus();
+    }
   }
 
   function focusVenueFromCard(venue: Venue) {
+    const previous = lastCardZoomFocusRef.current;
+    const nextZoom =
+      previous?.venueId === venue.id
+        ? Math.min(previous.zoom + MOBILE_CARD_FOCUS_STEP, MOBILE_CARD_FOCUS_MAX_ZOOM)
+        : MOBILE_CARD_FOCUS_ZOOM;
+
+    lastCardZoomFocusRef.current = {
+      venueId: venue.id,
+      zoom: nextZoom,
+    };
+    lastCardManualFocusAtRef.current = Date.now();
     setFocusedTimelineVenueId(venue.id);
     setManualMapFocus({
       venueId: venue.id,
-      zoom: MOBILE_CARD_FOCUS_ZOOM,
+      zoom: nextZoom,
     });
   }
 
@@ -1006,19 +1189,13 @@ export function VenueDashboard({
     openVenueDetails(venue);
   }
 
-  function scrollToVenueRecord(venueId: string) {
-    const isMobile = typeof window !== "undefined" && window.matchMedia("(max-width: 720px)").matches;
-    const target = timelineItemRefs.current[venueId];
-    target?.scrollIntoView(
-      isMobile
-        ? { behavior: "smooth", block: "start" }
-        : { behavior: "smooth", inline: "start", block: "nearest" },
-    );
-
+  function openVenueFromCalendar(venueId: string) {
     const venue = filteredVenues.find((item) => item.id === venueId);
-    if (venue) {
-      focusVenueFromCard(venue);
+    if (!venue) {
+      return;
     }
+
+    openVenueFromList(venue);
   }
 
   function stopEventPropagation(event: React.SyntheticEvent) {
@@ -1066,10 +1243,26 @@ export function VenueDashboard({
                 {magicLinkEnabled ? (
                   <button
                     className={authMode === "magic-link" ? "table-button active" : "table-button"}
-                    onClick={() => setAuthMode("magic-link")}
+                    onClick={() => {
+                      setAuthMode("magic-link");
+                      setAuthOtp("");
+                      setOtpRequested(false);
+                    }}
                     type="button"
                   >
                     マジックリンク
+                  </button>
+                ) : null}
+                {magicLinkEnabled ? (
+                  <button
+                    className={authMode === "email-otp" ? "table-button active" : "table-button"}
+                    onClick={() => {
+                      setAuthMode("email-otp");
+                      setOtpRequested(false);
+                    }}
+                    type="button"
+                  >
+                    メールOTP
                   </button>
                 ) : null}
               </div>
@@ -1083,18 +1276,87 @@ export function VenueDashboard({
                 />
               </label>
               {authMode === "password" ? (
+                <>
+                  <div className="auth-mode-switch">
+                    <button
+                      className={
+                        passwordAuthIntent === "sign-in" ? "table-button active" : "table-button"
+                      }
+                      onClick={() => setPasswordAuthIntent("sign-in")}
+                      type="button"
+                    >
+                      サインイン
+                    </button>
+                    <button
+                      className={
+                        passwordAuthIntent === "sign-up" ? "table-button active" : "table-button"
+                      }
+                      onClick={() => setPasswordAuthIntent("sign-up")}
+                      type="button"
+                    >
+                      新規登録
+                    </button>
+                  </div>
+                  <label className="field">
+                    パスワード
+                    <input
+                      autoComplete={
+                        passwordAuthIntent === "sign-up" ? "new-password" : "current-password"
+                      }
+                      onChange={(event) => setAuthPassword(event.target.value)}
+                      type="password"
+                      value={authPassword}
+                    />
+                  </label>
+                  {passwordAuthIntent === "sign-up" ? (
+                    <>
+                      <label className="field">
+                        FirstName (半角)
+                        <input
+                          autoComplete="given-name"
+                          onChange={(event) => setAuthFirstName(event.target.value)}
+                          placeholder="例: Takashi"
+                          type="text"
+                          value={authFirstName}
+                        />
+                      </label>
+                      <label className="field">
+                        LastName (半角)
+                        <input
+                          autoComplete="family-name"
+                          onChange={(event) => setAuthLastName(event.target.value)}
+                          placeholder="例: Wada"
+                          type="text"
+                          value={authLastName}
+                        />
+                      </label>
+                    </>
+                  ) : null}
+                </>
+              ) : null}
+              {authMode === "email-otp" ? (
                 <label className="field">
-                  パスワード
+                  認証コード (6桁)
                   <input
-                    autoComplete="current-password"
-                    onChange={(event) => setAuthPassword(event.target.value)}
-                    type="password"
-                    value={authPassword}
+                    autoComplete="one-time-code"
+                    inputMode="numeric"
+                    onChange={(event) => setAuthOtp(event.target.value)}
+                    placeholder="メールで届いた6桁コード"
+                    type="text"
+                    value={authOtp}
                   />
                 </label>
               ) : null}
               <button className="primary-button" type="submit">
-                {authMode === "password" ? "サインイン / 登録" : "マジックリンク送信"}
+                {authMode === "password"
+                  ? passwordAuthIntent === "sign-up"
+                    ? "新規登録"
+                    : "サインイン"
+                  : authMode === "magic-link"
+                    ? "マジックリンク送信"
+                    : authOtp.trim()
+                      ? "OTPでサインイン"
+                      : "OTPを送信"}
               </button>
             </form>
             <div className="auth-actions">
@@ -1105,9 +1367,22 @@ export function VenueDashboard({
               ) : null}
             </div>
             <p className="panel-note">{message}</p>
+            {showMailInboxLink ? (
+              <p className="csv-note">
+                受信確認:{" "}
+                <a className="detail-link" href={localMailInboxUrl} rel="noreferrer" target="_blank">
+                  Mailpitを開く
+                </a>
+              </p>
+            ) : null}
             {magicLinkEnabled ? (
               <p className="csv-note">
                 ローカル開発では SMTP を Mailpit に向けると、送信されたログインリンクを確認できます。
+              </p>
+            ) : null}
+            {authMode === "email-otp" && otpRequested ? (
+              <p className="csv-note">
+                OTPを再送する場合は認証コード欄を空にしてから「OTPを送信」を押してください。
               </p>
             ) : null}
           </section>
@@ -1139,55 +1414,66 @@ export function VenueDashboard({
           </div>
         </div>
         <section className="auth-panel">
-          <div className="profile-chip">
-            <span className="profile-avatar">{(userEmail ?? "U").slice(0, 1).toUpperCase()}</span>
-            <span className="profile-email">{userEmail ?? "未サインイン"}</span>
-          </div>
-          {!userEmail ? (
-            <form className="auth-form" onSubmit={handleEmailAuthSubmit}>
-              <div className="auth-mode-switch">
-                <button
-                  className={authMode === "password" ? "table-button active" : "table-button"}
-                  onClick={() => setAuthMode("password")}
-                  type="button"
-                >
-                  メール+パスワード
-                </button>
-                {magicLinkEnabled ? (
-                  <button
-                    className={authMode === "magic-link" ? "table-button active" : "table-button"}
-                    onClick={() => setAuthMode("magic-link")}
-                    type="button"
-                  >
-                    マジックリンク
-                  </button>
-                ) : null}
+          <div className="profile-card">
+            <button
+              className="profile-chip profile-chip-button"
+              onClick={() => setIsEditingProfile(true)}
+              type="button"
+            >
+              <span className="profile-avatar">{(userName ?? userEmail ?? "U").slice(0, 1).toUpperCase()}</span>
+              <div className="profile-details">
+                <span className="profile-name">{userName ?? "ユーザー"}</span>
+                <span className="profile-email">{userEmail ?? "-"}</span>
               </div>
-              <label className="field">
-                メールアドレス
-                <input
-                  autoComplete="email"
-                  onChange={(event) => setAuthEmail(event.target.value)}
-                  type="email"
-                  value={authEmail}
-                />
-              </label>
-              {authMode === "password" ? (
+            </button>
+            {isEditingProfile ? (
+              <form
+                className="auth-form"
+                onSubmit={(event) => {
+                  event.preventDefault();
+                  void saveProfileName();
+                }}
+              >
                 <label className="field">
-                  パスワード
+                  FirstName (半角)
                   <input
-                    autoComplete="current-password"
-                    onChange={(event) => setAuthPassword(event.target.value)}
-                    type="password"
-                    value={authPassword}
+                    autoComplete="given-name"
+                    onChange={(event) => setProfileFirstName(event.target.value)}
+                    placeholder="例: Takashi"
+                    type="text"
+                    value={profileFirstName}
                   />
                 </label>
-              ) : null}
-              <button className="primary-button" type="submit">
-                {authMode === "password" ? "サインイン / 登録" : "マジックリンク送信"}
-              </button>
-            </form>
-          ) : null}
+                <label className="field">
+                  LastName (半角)
+                  <input
+                    autoComplete="family-name"
+                    onChange={(event) => setProfileLastName(event.target.value)}
+                    placeholder="例: Wada"
+                    type="text"
+                    value={profileLastName}
+                  />
+                </label>
+                <div className="auth-actions">
+                  <button className="primary-button" disabled={profileSaving} type="submit">
+                    {profileSaving ? "保存中..." : "保存"}
+                  </button>
+                  <button
+                    className="ghost-button"
+                    onClick={() => {
+                      setIsEditingProfile(false);
+                      const nameParts = splitPersonName(userName);
+                      setProfileFirstName(nameParts.firstName);
+                      setProfileLastName(nameParts.lastName);
+                    }}
+                    type="button"
+                  >
+                    キャンセル
+                  </button>
+                </div>
+              </form>
+            ) : null}
+          </div>
           <div className="auth-actions">
             {userEmail ? (
               <button className="ghost-button" onClick={signOut} type="button">
@@ -1266,7 +1552,7 @@ export function VenueDashboard({
           ) : (
             <VenueCalendar
               focusVenue={mapFocusVenue}
-              onVenueSelect={scrollToVenueRecord}
+              onVenueSelect={openVenueFromCalendar}
               venues={filteredVenues}
             />
           )}
@@ -1293,7 +1579,12 @@ export function VenueDashboard({
                   data-focused={venue.id === leadingVenue?.id}
                   data-status={venue.status}
                   key={venue.id}
-                  onClick={() => focusVenueFromCard(venue)}
+                  onClick={() => {
+                    if (Date.now() < timelineSuppressClickUntilRef.current) {
+                      return;
+                    }
+                    focusVenueFromCard(venue);
+                  }}
                   ref={(element) => {
                     timelineItemRefs.current[venue.id] = element;
                   }}
@@ -2110,13 +2401,44 @@ function normalizeVenueKey(value: string) {
   return value.trim().replace(/\s+/g, "").toLowerCase();
 }
 
+function normalizeFullName(firstName: string, lastName: string) {
+  const first = firstName.trim();
+  const last = lastName.trim();
+
+  if (!first || !last) {
+    return "";
+  }
+
+  return `${first} ${last}`;
+}
+
+function splitPersonName(name: string | null | undefined) {
+  const normalized = (name ?? "").trim().replace(/\s+/g, " ");
+
+  if (!normalized) {
+    return { firstName: "", lastName: "" };
+  }
+
+  const [firstName, ...rest] = normalized.split(" ");
+  return {
+    firstName,
+    lastName: rest.join(" "),
+  };
+}
+
+function isHalfWidthName(value: string) {
+  return /^[\x20-\x7E]+$/.test(value);
+}
+
 async function syncSessionState(
+  setUserName: (value: string | null) => void,
   setUserEmail: (value: string | null) => void,
   setVenues: (value: Venue[] | ((current: Venue[]) => Venue[])) => void,
   setMessage: (value: string) => void,
   databaseEnabled: boolean,
-  user: { email?: string | null } | null,
+  user: { name?: string | null; email?: string | null } | null,
 ) {
+  setUserName(user?.name ?? null);
   setUserEmail(user?.email ?? null);
 
   if (!user?.email) {
@@ -2134,7 +2456,14 @@ async function syncSessionState(
   try {
     const fetchedVenues = await listVenuesByApi();
     setVenues(fetchedVenues);
-    setMessage(`サインイン中: ${user.email}`);
+    if (fetchedVenues.length === 0) {
+      setMessage(
+        `サインイン中: ${user.name ?? user.email} / 会場データはまだありません。右下の「会場を登録」またはCSV取込から追加してください。`,
+      );
+      return;
+    }
+
+    setMessage(`サインイン中: ${user.name ?? user.email}`);
   } catch (error) {
     setMessage(
       error instanceof Error
