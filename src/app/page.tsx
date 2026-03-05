@@ -42,7 +42,13 @@ export default async function Home({ searchParams }: HomeProps) {
   initialUserName = user?.name ?? null;
 
   if (user && databaseEnabled) {
-    initialVenues = await listVenues();
+    try {
+      initialVenues = await listVenues();
+    } catch (error) {
+      console.error("Failed to load venues on initial render.", error);
+      initialVenues = [];
+      initialMessage = "会場データの取得に失敗しました。再読み込みまたは再サインインをお試しください。";
+    }
   }
 
   if (!initialMessage) {

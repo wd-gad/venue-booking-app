@@ -15,8 +15,13 @@ export async function GET() {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const venues = await listVenues();
-  return NextResponse.json(venues);
+  try {
+    const venues = await listVenues();
+    return NextResponse.json(venues);
+  } catch (error) {
+    console.error("Failed to list venues.", error);
+    return NextResponse.json({ error: "会場一覧の取得に失敗しました。" }, { status: 500 });
+  }
 }
 
 export async function POST(request: Request) {
@@ -30,12 +35,17 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const payload = (await request.json()) as VenueInput;
-  const venue = await createVenue({
-    ...payload,
-    ownerId: user.id,
-    editorEmail: user.email,
-  });
+  try {
+    const payload = (await request.json()) as VenueInput;
+    const venue = await createVenue({
+      ...payload,
+      ownerId: user.id,
+      editorEmail: user.email,
+    });
 
-  return NextResponse.json(venue, { status: 201 });
+    return NextResponse.json(venue, { status: 201 });
+  } catch (error) {
+    console.error("Failed to create venue.", error);
+    return NextResponse.json({ error: "会場登録に失敗しました。" }, { status: 500 });
+  }
 }

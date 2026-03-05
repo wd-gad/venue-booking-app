@@ -167,9 +167,14 @@ export const auth = betterAuth({
 export type AuthSession = typeof auth.$Infer.Session;
 
 export async function getAuthSession() {
-  return auth.api.getSession({
-    headers: await headers(),
-  });
+  try {
+    return await auth.api.getSession({
+      headers: await headers(),
+    });
+  } catch (error) {
+    console.error("Failed to get auth session.", error);
+    return null;
+  }
 }
 
 export async function getAuthUser() {

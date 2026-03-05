@@ -19,18 +19,23 @@ export async function PATCH(request: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = await params;
-  const payload = (await request.json()) as Partial<VenueInput>;
-  const venue = await updateVenue(id, {
-    ...payload,
-    editorEmail: user.email,
-  });
+  try {
+    const { id } = await params;
+    const payload = (await request.json()) as Partial<VenueInput>;
+    const venue = await updateVenue(id, {
+      ...payload,
+      editorEmail: user.email,
+    });
 
-  if (!venue) {
-    return NextResponse.json({ error: "Venue not found." }, { status: 404 });
+    if (!venue) {
+      return NextResponse.json({ error: "Venue not found." }, { status: 404 });
+    }
+
+    return NextResponse.json(venue);
+  } catch (error) {
+    console.error("Failed to update venue.", error);
+    return NextResponse.json({ error: "会場更新に失敗しました。" }, { status: 500 });
   }
-
-  return NextResponse.json(venue);
 }
 
 export async function DELETE(_request: Request, { params }: Params) {
@@ -44,12 +49,17 @@ export async function DELETE(_request: Request, { params }: Params) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
-  const { id } = await params;
-  const deleted = await deleteVenue(id);
+  try {
+    const { id } = await params;
+    const deleted = await deleteVenue(id);
 
-  if (!deleted) {
-    return NextResponse.json({ error: "Venue not found." }, { status: 404 });
+    if (!deleted) {
+      return NextResponse.json({ error: "Venue not found." }, { status: 404 });
+    }
+
+    return NextResponse.json({ success: true });
+  } catch (error) {
+    console.error("Failed to delete venue.", error);
+    return NextResponse.json({ error: "会場削除に失敗しました。" }, { status: 500 });
   }
-
-  return NextResponse.json({ success: true });
 }
