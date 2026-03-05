@@ -2487,7 +2487,8 @@ async function listVenuesByApi() {
   });
 
   if (!response.ok) {
-    throw new Error(await getErrorMessage(response, "会場一覧の取得に失敗しました。"));
+    const message = await getErrorMessage(response, "会場一覧の取得に失敗しました。");
+    throw new Error(`${message} (HTTP ${response.status})`);
   }
 
   return (await response.json()) as Venue[];
